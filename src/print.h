@@ -18,6 +18,9 @@ void print_column_number(const match_t matches[], size_t last_printed_match,
 void print_file_separator(void);
 const char *normalize_path(const char *path);
 
+/* Console attribute word. Filled in on Win32; unset elsewhere. */
+unsigned char *console_attr_word(void);
+
 #ifdef _WIN32
 void windows_use_ansi(int use_ansi);
 int fprintf_w32(FILE *fp, const char *format, ...);

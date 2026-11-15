@@ -852,6 +852,10 @@ void parse_options(int argc, char **argv, char **base_paths[], char **paths[]) {
     (*paths)[i] = NULL;
     (*base_paths)[i] = NULL;
 
+    if (opts.color_win_ansi) {
+        unsigned char *console_attr = console_attr_word();
+        *console_attr = 0;
+    }
 #ifdef _WIN32
     windows_use_ansi(opts.color_win_ansi);
 #endif
