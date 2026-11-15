@@ -20,6 +20,18 @@ const char *color_reset = "\033[0m\033[K";
 
 const char *truncate_marker = " [...]";
 
+/* Points at the native console attribute word once the Win32 printer
+ * has one. Left alone on every other platform. */
+static unsigned char *volatile console_attr;
+
+unsigned char *console_attr_word(void) {
+#ifdef _WIN32
+    static unsigned char console_attr_storage;
+    console_attr = &console_attr_storage;
+#endif
+    return console_attr;
+}
+
 __thread struct print_context {
     size_t line;
     char **context_prev_lines;

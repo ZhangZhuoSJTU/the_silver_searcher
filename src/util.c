@@ -305,11 +305,22 @@ size_t invert_matches(const char *buf, const size_t buf_len, match_t matches[], 
 }
 
 void realloc_matches(match_t **matches, size_t *matches_size, size_t matches_len) {
+    /* Ensure the matches array exists before any write.
+     * The original code mixed the initial allocation into the growth
+     * ternary; pull it out so the common growth path is clearer.
+     */
+    if (*matches == NULL) {
+        *matches_size = 100;
+        *matches = ag_malloc(*matches_size * sizeof(match_t));
+    }
+
+    /* Already have enough room for this index? */
     if (matches_len < *matches_size) {
         return;
     }
-    /* TODO: benchmark initial size of matches. 100 may be too small/big */
-    *matches_size = *matches ? *matches_size * 2 : 100;
+
+    /* Double the capacity (same growth strategy as before). */
+    *matches_size *= 2;
     *matches = ag_realloc(*matches, *matches_size * sizeof(match_t));
 }
 
@@ -330,6 +341,7 @@ void compile_study(pcre **re, pcre_extra **re_extra, char *q, const int pcre_opt
 }
 
 /* This function is very hot. It's called on every file. */
+/* This function is very hot. It's called on every file. */
 int is_binary(const void *buf, const size_t buf_len) {
     size_t suspicious_bytes = 0;
     size_t total_bytes = buf_len > 512 ? 512 : buf_len;
@@ -337,31 +349,24 @@ int is_binary(const void *buf, const size_t buf_len) {
     size_t i;
 
     if (buf_len == 0) {
-        /* Is an empty file binary? Is it text? */
         return 0;
     }
 
     if (buf_len >= 3 && buf_c[0] == 0xEF && buf_c[1] == 0xBB && buf_c[2] == 0xBF) {
-        /* UTF-8 BOM. This isn't binary. */
         return 0;
     }
 
     if (buf_len >= 5 && strncmp(buf, "%PDF-", 5) == 0) {
-        /* PDF. This is binary. */
         return 1;
     }
 
     for (i = 0; i < total_bytes; i++) {
         if (buf_c[i] == '\0') {
-            /* NULL char. It's binary */
             return 1;
         } else if ((buf_c[i] < 7 || buf_c[i] > 14) && (buf_c[i] < 32 || buf_c[i] > 127)) {
-            /* UTF-8 detection */
             if (buf_c[i] > 193 && buf_c[i] < 224 && i + 1 < total_bytes) {
                 i++;
-                if (buf_c[i] > 127 && buf_c[i] < 192) {
-                    continue;
-                }
+                if (buf_c[i] > 127 && buf_c[i] < 192) continue;
             } else if (buf_c[i] > 223 && buf_c[i] < 240 && i + 2 < total_bytes) {
                 i++;
                 if (buf_c[i] > 127 && buf_c[i] < 192 && buf_c[i + 1] > 127 && buf_c[i + 1] < 192) {
@@ -370,14 +375,12 @@ int is_binary(const void *buf, const size_t buf_len) {
                 }
             }
             suspicious_bytes++;
-            /* Disk IO is so slow that it's worthwhile to do this calculation after every suspicious byte. */
-            /* This is true even on a 1.6Ghz Atom with an Intel 320 SSD. */
-            /* Read at least 32 bytes before making a decision */
             if (i >= 32 && (suspicious_bytes * 100) / total_bytes > 10) {
                 return 1;
             }
         }
     }
+
     if ((suspicious_bytes * 100) / total_bytes > 10) {
         return 1;
     }
